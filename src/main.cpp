@@ -6,7 +6,9 @@
 
 int main() {
 
-    TestTask::VFS{"12,", "121"};
+    // TestTask::VFS{"12,", "121"};
+
+    std::cout << "hello" << std::endl;
 
     return 0;
 }

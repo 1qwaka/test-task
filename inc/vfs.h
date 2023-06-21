@@ -53,7 +53,7 @@ private:
 private:
     vector<std::string> storage_filenames_;
     string format_;
-    size_t storage_file_size_limit_ 
+    size_t storage_file_size_limit_;
 
 };
 
