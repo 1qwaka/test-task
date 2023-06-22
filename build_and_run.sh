@@ -3,7 +3,9 @@
 mkdir -p build
 cd build
 cmake ..
-cmake --build .
 
-echo ""
-./app
+if cmake --build . 
+then
+    echo ""
+    ./app
+fi
