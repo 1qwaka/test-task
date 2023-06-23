@@ -68,24 +68,70 @@ static inline fstream& read_string(std::string& str, fstream& stream)
 {
     auto pos = stream.tellg();
 
-    std::cout << "POS: " << pos << std::endl;
-
     char c = 'a';
     size_t len = 0;
 
-    while (c != '\0')
+    while (c != '\0' && !stream.eof() && stream.good())
     {
+        // std::cout << "read c=" << c << " int=" << int(c) << std::endl;
+        // std::cout << "eof: " << stream.eof() << " good: " << stream.good() << std::endl;
         stream.get(c);
-        // std::cout << "read stream: " << c << " int:" << int(c) << " pos:" << stream.tellg() << std::endl;
-        // std::this_thread::sleep_for(std::chrono::seconds(1));
         ++len;
     }
     
     stream.seekg(pos);
 
-    auto buf = std::unique_ptr<char>(new char[len]);
-    stream.read(buf.get(), len);
-    str = buf.get();
+    if (len != 0)
+    {
+        auto buf = std::unique_ptr<char>(new char[len]);
+        stream.read(buf.get(), len);
+        str = std::string(buf.get(), len - 1);
+
+        // std::cout << "READ STRING SIZE=" << len << "   STR=" << str << std::endl;
+    }
 
     return stream;
+}
+
+static inline std::vector<std::string> split_string(const std::string& src, char delim, bool take_empty=false) 
+{
+    size_t last_idx = 0;
+    std::vector<std::string> res;
+
+    while (last_idx < src.size()) 
+    {
+        size_t delim_idx = src.find(delim, last_idx);
+        
+        if (delim_idx == std::string::npos) 
+        {
+            res.push_back(src.substr(last_idx, src.size() - last_idx));
+            break;
+        }
+        
+        if (take_empty && delim_idx - last_idx == 0) 
+        {
+            ++last_idx;
+            continue;
+        }
+
+        res.push_back(src.substr(last_idx, delim_idx - last_idx));
+        last_idx = delim_idx + 1;
+    }
+
+    return res;
+}
+
+static inline bool stream_empty(fstream& stream)
+{
+    stream.seekg(0, std::ios::end);
+    return stream.tellg() == 0;
+}
+
+static inline size_t stream_size(fstream& stream)
+{
+    auto pos = stream.tellg();
+    stream.seekg(0, std::ios::end);
+    size_t size = stream.tellg();
+    stream.seekg(pos);
+    return size;
 }
