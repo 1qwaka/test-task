@@ -26,7 +26,7 @@ using std::ofstream;
 
 VFS* VFS::Instance()
 {
-    static auto instance = std::make_unique<VFS>();
+    static auto instance = std::make_shared<VFS>();
     return instance.get();
 }
 
@@ -69,10 +69,59 @@ bool VFS::CreateNewStorageFile()
     return AddStorageFile(filename);  // ???
 }
 
+void VFS::test2()
+{
+    // CreateNewStorageFile();
+    cout << "filename: " << storage_files_[0].filename_ << endl;
+    cout << "stream good: " << storage_files_[0].stream_.good() << endl;
+
+    string path = "biba/example.txt";
+    auto& sfile = storage_files_[0];
+
+    sfile.tree_.Print(cout);
+
+    auto free_chunk = sfile.GetFreeChunk();
+    cout << "after GetFreeChunk stream good: " << sfile.stream_.good() << endl;
+    cout << "free chunk: " << free_chunk << endl;
+
+    bool actually_added = sfile.tree_.AddFile(path, free_chunk);
+    cout << "actually_added: " << actually_added << endl;
+    
+
+    if (!actually_added)
+    {
+        cout << "FILE EXISTS" << endl;
+        return;
+    }
+
+    bool shoul_shift_file_chunks = ToChunks(sfile.tree_.CalcSize()) > ToChunks(sfile.tree_.tree_size_);
+    cout << "shoul_shift_file_chunks: " << shoul_shift_file_chunks << endl;
+
+    cout << "before shift stream good: " << sfile.stream_.good() << endl;
+    if (shoul_shift_file_chunks)
+    {
+        sfile.tree_.ShiftFileChunks(kChunkSize);
+        sfile.ShiftChunks(ToBytes(ToChunks(sfile.tree_.CalcSize())));
+    }
+    
+    cout << "before wrote stream good: " << sfile.stream_.good() << endl;
+    sfile.tree_.Write(sfile.stream_);
+    cout << "tree wrote stream good: " << sfile.stream_.good() << endl;
+}
+
+
+// 1. получить свободный чанк
+// 2. создать запись в дереве
+// 3. сдвинуть адреса в дереве если нет места для дерева
+// 4. сдвинуть все чанки если нет места для дерева
+// 5. записать дерево 
+
 
 void VFS::test()
 {
     CreateNewStorageFile();
+    // return;
+
 
     cout << "name: " << storage_files_[0].filename_ << endl;
     cout << "good: " << storage_files_[0].stream_.good() << endl;
@@ -80,35 +129,35 @@ void VFS::test()
     using TreeNode = FileTree::TreeNode;
 
     auto tree = FileTree();
-    tree.root_ = std::make_unique<TreeNode>(TreeNode::kDirectory);
+    tree.root_ = std::make_shared<TreeNode>(TreeNode::kDirectory);
     tree.root_->dir_.name_ = "aads";
   
 
 
-    auto task1_cpp = std::make_unique<TreeNode>("task1.cpp", TreeNode::kFile);
-    auto task2_cpp = std::make_unique<TreeNode>("task2.cpp", TreeNode::kFile);
-    auto task3_cpp = std::make_unique<TreeNode>("task3.cpp", TreeNode::kFile);
-    auto a_py = std::make_unique<TreeNode>("a.py", TreeNode::kFile);
+    auto task1_cpp = std::make_shared<TreeNode>("task1.cpp", TreeNode::kFile);
+    auto task2_cpp = std::make_shared<TreeNode>("task2.cpp", TreeNode::kFile);
+    auto task3_cpp = std::make_shared<TreeNode>("task3.cpp", TreeNode::kFile);
+    auto a_py = std::make_shared<TreeNode>("a.py", TreeNode::kFile);
     
-    auto rk1_dir = std::make_unique<TreeNode>("rk1", TreeNode::kDirectory);
+    auto rk1_dir = std::make_shared<TreeNode>("rk1", TreeNode::kDirectory);
     rk1_dir->AppendSubnode(std::move(task2_cpp));
     rk1_dir->AppendSubnode(std::move(task3_cpp));
     
-    auto mod1_dir = std::make_unique<TreeNode>("mod1", TreeNode::kDirectory);
+    auto mod1_dir = std::make_shared<TreeNode>("mod1", TreeNode::kDirectory);
     mod1_dir->AppendSubnode(std::move(a_py));
     mod1_dir->AppendSubnode(std::move(task1_cpp));
     mod1_dir->AppendSubnode(std::move(rk1_dir));
     
 
-    auto app_exe = std::make_unique<TreeNode>("app.exe", TreeNode::kFile);
-    auto task5_cpp = std::make_unique<TreeNode>("task5.cpp", TreeNode::kFile);
+    auto app_exe = std::make_shared<TreeNode>("app.exe", TreeNode::kFile);
+    auto task5_cpp = std::make_shared<TreeNode>("task5.cpp", TreeNode::kFile);
     
-    auto rk2_dir = std::make_unique<TreeNode>("rk2", TreeNode::kDirectory);
+    auto rk2_dir = std::make_shared<TreeNode>("rk2", TreeNode::kDirectory);
     rk2_dir->AppendSubnode(std::move(app_exe));
     
-    auto aboba_dir = std::make_unique<TreeNode>("aboba", TreeNode::kDirectory);
+    auto aboba_dir = std::make_shared<TreeNode>("aboba", TreeNode::kDirectory);
     
-    auto mod2_dir = std::make_unique<TreeNode>("mod2", TreeNode::kDirectory);
+    auto mod2_dir = std::make_shared<TreeNode>("mod2", TreeNode::kDirectory);
     mod2_dir->AppendSubnode(std::move(rk2_dir));
     mod2_dir->AppendSubnode(std::move(task5_cpp));
     mod2_dir->AppendSubnode(std::move(aboba_dir));
@@ -118,6 +167,13 @@ void VFS::test()
     tree.root_->dir_.subnodes_amount_ = tree.root_->dir_.subnodes_.size();
 
 
+    cout << "actually added: " << tree.AddFile("dodo/igolki/22.txt") << endl;
+    cout << "actually added: " << tree.AddFile("dodo/igolki/aaaa") << endl;
+    cout << "actually added: " << tree.AddFile("dodo/jopa.py") << endl;
+    cout << "actually added: " << tree.AddFile("dodo/igolki/aaaa") << endl;
+    cout << "actually added: " << tree.AddFile("mod2/task5.cpp") << endl;
+    cout << "actually added: " << tree.AddFile("mod2/aboba/ffffile") << endl;
+    cout << "actually added: " << tree.AddFile("mod1/rk1/task4.cpp") << endl;
 
     tree.Write(storage_files_[0].stream_);
 
@@ -133,10 +189,10 @@ void VFS::test()
 
 
 
-File* VFS::Open( const char *name )
-{
-    return nullptr;
-}
+// File* VFS::Open( const char *name )
+// {
+//     return nullptr;
+// }
 
 File* VFS::Create( const char *name )
 {
