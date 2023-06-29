@@ -38,7 +38,14 @@ VFS::VFS(initializer_list<string> storage_filenames)
 
 bool VFS::AddStorageFile(const string& filename)
 {
-    storage_files_.emplace_back(filename);
+    StorageFile file(filename);
+    if (!file.Valid())
+    {
+        return false;
+        std::cerr << "invalid storage file " << __FILE__ << ":" << __LINE__ << std::endl;
+    }
+
+    storage_files_.push_back(std::move(file));  
     return true;
 }
 
@@ -72,17 +79,17 @@ bool VFS::CreateNewStorageFile()
 void VFS::test2()
 {
     // CreateNewStorageFile();
-    cout << "filename: " << storage_files_[0].filename_ << endl;
-    cout << "stream good: " << storage_files_[0].stream_.good() << endl;
+    cout << "storage filename: " << storage_files_[0].filename_ << endl;
+    cout << "storage file valid: " << storage_files_[0].Valid() << endl;
 
-    string path = "biba/example.txt";
+    string path = "biba/aboba.txt";
     auto& sfile = storage_files_[0];
 
     sfile.tree_.Print(cout);
 
     auto free_chunk = sfile.GetFreeChunk();
     cout << "after GetFreeChunk stream good: " << sfile.stream_.good() << endl;
-    cout << "free chunk: " << free_chunk << endl;
+    cout << "found free chunk: " << free_chunk << endl;
 
     bool actually_added = sfile.tree_.AddFile(path, free_chunk);
     cout << "actually_added: " << actually_added << endl;
@@ -91,22 +98,30 @@ void VFS::test2()
     if (!actually_added)
     {
         cout << "FILE EXISTS" << endl;
-        return;
+        // return;
     }
-
-    bool shoul_shift_file_chunks = ToChunks(sfile.tree_.CalcSize()) > ToChunks(sfile.tree_.tree_size_);
-    cout << "shoul_shift_file_chunks: " << shoul_shift_file_chunks << endl;
-
-    cout << "before shift stream good: " << sfile.stream_.good() << endl;
-    if (shoul_shift_file_chunks)
+    else
     {
-        sfile.tree_.ShiftFileChunks(kChunkSize);
-        sfile.ShiftChunks(ToBytes(ToChunks(sfile.tree_.CalcSize())));
+        bool should_shift_file_chunks = ToChunks(sfile.tree_.CalcSize()) > ToChunks(sfile.tree_.tree_size_);
+        cout << "should_shift_file_chunks: " << should_shift_file_chunks << endl;
+
+        cout << "before shift stream good: " << sfile.stream_.good() << endl;
+        if (should_shift_file_chunks)
+        {
+            sfile.tree_.ShiftFileChunks(kChunkSize);
+            sfile.ShiftChunks(ToBytes(ToChunks(sfile.tree_.CalcSize())));
+
+            free_chunk += kChunkSize;
+        }
+
+        ChunkHeader header;
+        header.Write(sfile.stream_, free_chunk);
+        
+        cout << "before wrote stream good: " << sfile.stream_.good() << endl;
+        sfile.tree_.Write(sfile.stream_);
+        cout << "tree wrote stream good: " << sfile.stream_.good() << endl;
     }
-    
-    cout << "before wrote stream good: " << sfile.stream_.good() << endl;
-    sfile.tree_.Write(sfile.stream_);
-    cout << "tree wrote stream good: " << sfile.stream_.good() << endl;
+
 }
 
 
@@ -115,6 +130,7 @@ void VFS::test2()
 // 3. сдвинуть адреса в дереве если нет места для дерева
 // 4. сдвинуть все чанки если нет места для дерева
 // 5. записать дерево 
+// 6. записать в чанк, что он занят
 
 
 void VFS::test()
@@ -167,13 +183,13 @@ void VFS::test()
     tree.root_->dir_.subnodes_amount_ = tree.root_->dir_.subnodes_.size();
 
 
-    cout << "actually added: " << tree.AddFile("dodo/igolki/22.txt") << endl;
-    cout << "actually added: " << tree.AddFile("dodo/igolki/aaaa") << endl;
-    cout << "actually added: " << tree.AddFile("dodo/jopa.py") << endl;
-    cout << "actually added: " << tree.AddFile("dodo/igolki/aaaa") << endl;
-    cout << "actually added: " << tree.AddFile("mod2/task5.cpp") << endl;
-    cout << "actually added: " << tree.AddFile("mod2/aboba/ffffile") << endl;
-    cout << "actually added: " << tree.AddFile("mod1/rk1/task4.cpp") << endl;
+    cout << "actually added dodo/igolki/22.txt: " << tree.AddFile("dodo/igolki/22.txt") << endl;
+    cout << "actually added dodo/igolki/aaaa: " << tree.AddFile("dodo/igolki/aaaa") << endl;
+    cout << "actually added dodo/jopa.py: " << tree.AddFile("dodo/jopa.py") << endl;
+    cout << "actually added dodo/igolki/aaaa: " << tree.AddFile("dodo/igolki/aaaa") << endl;
+    cout << "actually added mod2/task5.cpp: " << tree.AddFile("mod2/task5.cpp") << endl;
+    cout << "actually added mod2/aboba/ffffile: " << tree.AddFile("mod2/aboba/ffffile") << endl;
+    cout << "actually added mod1/rk1/task4.cpp: " << tree.AddFile("mod1/rk1/task4.cpp") << endl;
 
     tree.Write(storage_files_[0].stream_);
 
@@ -188,11 +204,23 @@ void VFS::test()
 }
 
 
+size_t VFS::ToChunks(size_t bytes)
+{
+    return bytes / kChunkSize + (bytes % kChunkSize == 0 ? 0 : 1);
+}
 
-// File* VFS::Open( const char *name )
-// {
-//     return nullptr;
-// }
+
+size_t VFS::ToBytes(size_t chunks)
+{
+    return chunks * kChunkSize;
+}
+
+
+
+File* VFS::Open( const char *name )
+{
+    return nullptr;
+}
 
 File* VFS::Create( const char *name )
 {

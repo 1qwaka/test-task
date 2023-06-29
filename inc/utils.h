@@ -5,8 +5,16 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <vector>
+
+
+namespace TestTask
+{
 
 using std::fstream;
+
+extern bool little_endian;
+
 
 static inline bool is_little_endian()
 {
@@ -26,7 +34,7 @@ Integer swap_bytes(Integer num)
 template <typename Integer>
 Integer local2little_endian(Integer num)
 {
-    if (is_little_endian())
+    if (little_endian)
         return num;
     
     return swap_bytes<Integer>(num);
@@ -35,7 +43,7 @@ Integer local2little_endian(Integer num)
 template <typename Integer>
 Integer little_endian2local(Integer num)
 {
-    if (is_little_endian())
+    if (little_endian)
         return num;
     
     return swap_bytes<Integer>(num);
@@ -57,10 +65,10 @@ fstream& read_integer(Integer& num, fstream& stream)
     return stream;
 }
 
-static inline fstream& fill_bytes(size_t amount, uint8_t byte, fstream& stream)
+static inline fstream& fill_bytes(size_t amount, char byte, fstream& stream)
 {
     for (size_t i = 0; i < amount; i++)
-        stream.put((char)byte);
+        stream.put(byte);
     return stream;
 }
 
@@ -98,6 +106,11 @@ static inline std::vector<std::string> split_string(const std::string& src, char
     size_t last_idx = 0;
     std::vector<std::string> res;
 
+    if (src.size() == 0)
+        return res;
+    
+    // if ()
+
     while (last_idx < src.size()) 
     {
         size_t delim_idx = src.find(delim, last_idx);
@@ -108,7 +121,7 @@ static inline std::vector<std::string> split_string(const std::string& src, char
             break;
         }
         
-        if (take_empty && delim_idx - last_idx == 0) 
+        if (!take_empty && delim_idx - last_idx == 0) 
         {
             ++last_idx;
             continue;
@@ -121,10 +134,13 @@ static inline std::vector<std::string> split_string(const std::string& src, char
     return res;
 }
 
-static inline bool stream_empty(fstream& stream)
+static inline bool is_stream_empty(fstream& stream)
 {
+    auto pos = stream.tellg();
     stream.seekg(0, std::ios::end);
-    return stream.tellg() == 0;
+    bool empty = stream.tellg() == 0;
+    stream.seekg(pos);
+    return empty;
 }
 
 static inline size_t stream_size(fstream& stream)
@@ -134,4 +150,6 @@ static inline size_t stream_size(fstream& stream)
     size_t size = stream.tellg();
     stream.seekg(pos);
     return size;
+}
+
 }
