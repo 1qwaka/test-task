@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cinttypes>
 #include <fstream>
 #include <string>

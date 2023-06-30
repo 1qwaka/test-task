@@ -8,7 +8,7 @@ using FileTree = VFS::FileTree;
 using TreeNode = FileTree::TreeNode;
 
 
-void FileTree::Search(shared_ptr<TreeNode> node, std::function<shared_ptr<TreeNode>(shared_ptr<TreeNode>&)> searcher)
+void FileTree::Search(shared_ptr<TreeNode> node, const std::function<shared_ptr<TreeNode>(shared_ptr<TreeNode>&)>& searcher)
 {
     auto next = searcher(node);
     if (next)
@@ -16,7 +16,7 @@ void FileTree::Search(shared_ptr<TreeNode> node, std::function<shared_ptr<TreeNo
 }
 
 
-void FileTree::DFS(shared_ptr<TreeNode> node, std::function<void(const shared_ptr<TreeNode>&)> processor)
+void FileTree::DFS(shared_ptr<TreeNode> node, const NodeProcessor& processor)
 {
     std::stack<shared_ptr<TreeNode>> stack;
 
@@ -35,7 +35,7 @@ void FileTree::DFS(shared_ptr<TreeNode> node, std::function<void(const shared_pt
 }
 
 
-void FileTree::DFS(shared_ptr<TreeNode> node, std::function<void(const shared_ptr<const TreeNode>&)> processor) const
+void FileTree::DFS(shared_ptr<TreeNode> node, const ConstNodeProcessor& processor) const
 {
     auto* not_const_this = const_cast<FileTree*>(this);
 
@@ -112,7 +112,7 @@ shared_ptr<TreeNode> FileTree::GetNode(const string& path_str, uint16_t type, bo
     {
         if (type == TreeNode::kDirectory && 
             create_missing_dirs && 
-            !root_->Has(path[0], type))
+            !root_->Has(path[0], TreeNode::kDirectory))
         {
             root_->AppendSubnode(make_shared<TreeNode>(path[0], TreeNode::kDirectory));
         }
@@ -169,8 +169,9 @@ shared_ptr<TreeNode> FileTree::GetNode(const string& path_str, uint16_t type, bo
 
 void FileTree::Print(std::ostream& os) const
 {
-    os << "FileTree{size=" << tree_size_ << "; root=" << root_.get() << "}" << endl;
+    os << "FileTree\n{\nsize=" << tree_size_ << "; root=" << root_.get() << endl;
     PrintNode(os, root_);
+    os << "}" << endl;
 }
 
 
@@ -296,7 +297,7 @@ void FileTree::ReadDirectoryNode(shared_ptr<TreeNode>& node, fstream& stream)
         // cout << "tellg: " << stream.tellg() << endl;
         uint64_t subnode_pos;
         read_integer(subnode_pos, stream);
-        cout << "[FileTree::ReadDirectoryNode] read subnode" << endl;
+        cout << "[FileTree::ReadDirectoryNode] read subnode of " << dir.name_ << endl;
         cout << "   pos = " << subnode_pos << endl;
 
         auto prev_pos = stream.tellg();
@@ -315,7 +316,7 @@ void FileTree::ReadDirectoryNode(shared_ptr<TreeNode>& node, fstream& stream)
 
 void FileTree::InitializeEmptyTree(fstream& stream)
 {
-    root_ = std::make_shared<TreeNode>(TreeNode::kDirectory, kDefaultRootName);
+    root_ = std::make_shared<TreeNode>(string(kDefaultRootName), TreeNode::kDirectory);
     cout << "[FileTree::InitializeEmptyTree] begin write" << endl;
     Write(stream);
     cout << "[FileTree::InitializeEmptyTree] end write" << endl;
@@ -357,7 +358,7 @@ uint64_t FileTree::WriteNode(shared_ptr<TreeNode>& node, fstream& stream)
 void FileTree::WriteDirectoryNode(shared_ptr<TreeNode>& node, fstream& stream)
 {
     auto& dir = node->dir_;
-    cout << "[FileTree::WriteDirectoryNode]" << *node << endl;
+    cout << "[FileTree::WriteDirectoryNode] " << *node << endl;
     
     write_integer(dir.subnodes_amount_, stream);
     stream.write(dir.name_.c_str(), dir.name_.size() + 1);
@@ -390,5 +391,22 @@ void FileTree::WriteFileNode(shared_ptr<TreeNode>& node, fstream& stream)
     write_integer(file.content_size_, stream);
     stream.write(file.name_.c_str(), file.name_.size() + 1);
 }
+
+
+bool FileTree::IsGrown() const
+{
+    return ToChunks(CalcSize()) > ToChunks(tree_size_);
+}
+
+// void FileTree::Foreach(uint16_t type, const NodeProcessor& processor)
+// {
+
+// }
+
+bool FileTree::HasPath(const string& path_str, uint16_t type)
+{
+    return bool(GetNode(path_str, type));
+}
+
 
 }

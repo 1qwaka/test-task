@@ -2,9 +2,21 @@ cmake_minimum_required(VERSION 3.17)
 
 project(TestTask)
 
-set(SOURCES src/main.cpp src/vfs.cpp src/storagefile.cpp src/chunkheader.cpp src/filetree.cpp src/treenode.cpp src/utils.cpp)
+set(SOURCES 
+    src/main.cpp 
+    src/vfs.cpp 
+    src/storagefile.cpp 
+    src/chunkheader.cpp 
+    src/filetree.cpp 
+    src/treenode.cpp 
+    src/utils.cpp
+    src/filedescriptor.cpp)
 
-set(HEADERS inc/ivfs.h inc/utils.h inc/vfs.h)
+set(HEADERS 
+    inc/ivfs.h 
+    inc/utils.h 
+    inc/vfs.h 
+    inc/file.h)
 
 add_executable(app ${SOURCES} ${HEADERS})
 

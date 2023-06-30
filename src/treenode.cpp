@@ -137,8 +137,9 @@ void TreeNode::Print(std::ostream& os) const
         os << "directory; ";
         os << dir_.name_ << "; ";
         os << dir_.subnodes_amount_ << "; ";
+        
         for (auto& sub : dir_.subnodes_)
-            os << sub->Name() << ",";
+            os << sub->Name() << (sub->IsDirectory() ? "/" : sub->IsFile() ? "" : "?") << ",";
     }
     else if(IsFile())
     {

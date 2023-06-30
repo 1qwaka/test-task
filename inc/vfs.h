@@ -9,9 +9,11 @@
 #include <memory>
 #include <functional>
 #include <stack>
+#include <map>
 
 #include "ivfs.h"
 #include "utils.h"
+#include "file.h"
 
 
 using std::cout;
@@ -30,6 +32,9 @@ using std::fstream;
 using std::mutex;
 using std::shared_ptr;
 using std::make_shared;
+using std::function;
+using std::ostream;
+using std::map;
 
 
 struct VFS : IVFS
@@ -39,7 +44,7 @@ private:
     static constexpr size_t kMinimumStorageFileSize = kChunkSize * 2;
     static constexpr size_t kDefaultStorageFileSizeLimit = kChunkSize * 4096;
     static constexpr std::string_view kDefaultStorageFilePrefix = "storage-";
-    static constexpr uint64_t kInvalidPtr = 0;
+    static constexpr uint64_t kInvalidPos = 0;
     static constexpr char kPathDelimeter = '/';
 public:
 
@@ -58,16 +63,20 @@ public:
 
 
 // собственно файл
-// |            bool               |            bool                 |                               uint64                                   |                      uint64                     |  kChunkSize - 1 - 1 - 1 - 8 - 8 = 4077 байт |
-// | используется ли чанк (да/нет) | флаг последний ли чанк (да/нет) | количество используемых под контент байт в этом чанке (если последний) | указатель на следующий чанк (если не последний) |           непосредственно контент           |
+// |            bool               |         bool               |                               uint64                                   |                      uint64                     |  kChunkSize - 1 - 1 - 1 - 8 - 8 = 4077 байт |
+// | используется ли чанк (да/нет) | последний ли чанк (да/нет) | количество используемых под контент байт в этом чанке (если последний) | указатель на следующий чанк (если не последний) |           непосредственно контент           |
 
 
 
     struct FileTree
     {
+        struct TreeNode;
+        using NodeProcessor = function<void(const shared_ptr<TreeNode>&)>;
+        using ConstNodeProcessor = function<void(const shared_ptr<const TreeNode>&)>;
+
+
         static constexpr string_view kDefaultRootName = "root";
 
-        struct TreeNode;
         
         uint64_t tree_size_ = 0;
         shared_ptr<TreeNode> root_;
@@ -76,7 +85,7 @@ public:
         struct FileNodeInfo
         {
             string name_;
-            uint64_t first_chunk_ = kInvalidPtr;
+            uint64_t first_chunk_ = kInvalidPos;
             uint64_t content_size_ = 0;
         };
         
@@ -116,8 +125,9 @@ public:
 
             bool Has(const string& name, uint16_t type = kFile) const;
 
-            void Print(std::ostream& os) const;
-            friend std::ostream& operator<<(std::ostream& os, const TreeNode& node);
+            void Print(ostream& os) const;
+            
+            friend ostream& operator<<(ostream& os, const TreeNode& node);
 
         };
 
@@ -132,6 +142,7 @@ public:
    
         void InitializeEmptyTree(fstream& stream);
 
+
         void ReadDirectoryNode(shared_ptr<TreeNode>& node, fstream& stream);
 
         void ReadFileNode(shared_ptr<TreeNode>& node, fstream& stream);
@@ -140,24 +151,32 @@ public:
 
         bool Read(fstream& stream);
 
-        void PrintNode(std::ostream& os, const shared_ptr<TreeNode>& node, const std::string& path="") const;
 
-        void Print(std::ostream& os) const;
+        void PrintNode(ostream& os, const shared_ptr<TreeNode>& node, const std::string& path="") const;
 
-        friend std::ostream& operator<<(std::ostream& os, const FileTree& tree);
+        void Print(ostream& os) const;
+
+        friend ostream& operator<<(ostream& os, const FileTree& tree);
+
 
         shared_ptr<TreeNode> GetNode(const string& path_str, uint16_t type=TreeNode::kFile, bool create_missing_dirs=false);
 
-        bool AddFile(const string& path_str, uint64_t first_chunk = kInvalidPtr);
+        bool HasPath(const string& path_str, uint16_t type=TreeNode::kFile);
+        
+        bool AddFile(const string& path_str, uint64_t first_chunk = kInvalidPos);
 
-        void Search(shared_ptr<TreeNode> node, std::function<shared_ptr<TreeNode>(shared_ptr<TreeNode>&)> searcher);
+        void Search(shared_ptr<TreeNode> node, const function<shared_ptr<TreeNode>(shared_ptr<TreeNode>&)>& searcher);
 
-        void DFS(shared_ptr<TreeNode> node, std::function<void(const shared_ptr<TreeNode>&)> processor);
-        void DFS(shared_ptr<TreeNode> node, std::function<void(const shared_ptr<const TreeNode>&)> processor) const;
+        void DFS(shared_ptr<TreeNode> node, const NodeProcessor& processor);
+        void DFS(shared_ptr<TreeNode> node, const ConstNodeProcessor& processor) const;
 
         uint64_t CalcSize() const;
 
+        bool IsGrown() const;
+
         void ShiftFileChunks(uint64_t bytes);
+
+        // void Foreach(uint16_t type, const NodeProcessor& processor);
     };
 
     struct ChunkHeader
@@ -165,11 +184,17 @@ public:
         bool filled_ = true;
         bool last_ = true;
         uint64_t used_ = 0;
-        uint64_t next_ = 0;
+        uint64_t next_ = kInvalidPos;
 
-        void Read(fstream& stream, uint64_t pos = -1);
+        uint64_t last_read_pos_;
+
+        void Read(fstream& stream, uint64_t pos = kInvalidPos);
     
-        void Write(fstream& stream, uint64_t pos = -1);
+        void Write(fstream& stream, uint64_t pos = kInvalidPos);
+
+        bool HasNext() const;
+
+        void GoNext(fstream& stream);
     };
 
     struct StorageFile 
@@ -192,22 +217,28 @@ public:
 
         bool Valid();
 
-        uint64_t GetFreeChunk();
+        uint64_t FindFreeChunk();
 
         void ShiftChunks(size_t from, size_t shift = 1);
 
+        bool CreateEmptyFile(const string& path);
 
-// 1. получить свободный чанк
-// 2. сдвинуть адрес если нет места для дерева
-// 3. создать запись в дереве
-// 4. сдвинуть все чанки если нет места для дерева
-// 5. записать дерево 
+        bool HasFile(const string& path);
 
-        // bool AddFile()
-        // {
+        bool ClearFile(const string& path);
 
-        // }
+        bool ForeachChunk(const string& path, const function<void(ChunkHeader, fstream&)>& processor);
     };
+
+
+    struct FileDescriptor
+    {
+        shared_ptr<FileTree::TreeNode> node_;
+        FileMode mode_ = FileMode::kInvalid;
+
+        File* GetFile(FileMode mode);
+    };
+
 
     static size_t ToChunks(size_t bytes);
 
@@ -246,6 +277,7 @@ private:
     vector<StorageFile> storage_files_;
     string storage_filename_prefix_ = string(kDefaultStorageFilePrefix);
     size_t storage_file_size_limit_ = kDefaultStorageFileSizeLimit;
+    map<string, FileDescriptor> opened_files_;
 
 };
 

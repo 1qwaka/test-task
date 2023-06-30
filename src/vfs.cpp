@@ -41,8 +41,8 @@ bool VFS::AddStorageFile(const string& filename)
     StorageFile file(filename);
     if (!file.Valid())
     {
-        return false;
         std::cerr << "invalid storage file " << __FILE__ << ":" << __LINE__ << std::endl;
+        return false;
     }
 
     storage_files_.push_back(std::move(file));  
@@ -78,6 +78,9 @@ bool VFS::CreateNewStorageFile()
 
 void VFS::test2()
 {
+    storage_files_[0].CreateEmptyFile("biba/vvvv.c++");
+    return;
+
     // CreateNewStorageFile();
     cout << "storage filename: " << storage_files_[0].filename_ << endl;
     cout << "storage file valid: " << storage_files_[0].Valid() << endl;
@@ -87,8 +90,8 @@ void VFS::test2()
 
     sfile.tree_.Print(cout);
 
-    auto free_chunk = sfile.GetFreeChunk();
-    cout << "after GetFreeChunk stream good: " << sfile.stream_.good() << endl;
+    auto free_chunk = sfile.FindFreeChunk();
+    cout << "after FindFreeChunk stream good: " << sfile.stream_.good() << endl;
     cout << "found free chunk: " << free_chunk << endl;
 
     bool actually_added = sfile.tree_.AddFile(path, free_chunk);
@@ -219,7 +222,26 @@ size_t VFS::ToBytes(size_t chunks)
 
 File* VFS::Open( const char *name )
 {
-    return nullptr;
+    File* file = nullptr;
+    string str_name = name;
+
+    auto it = opened_files_.find(str_name);
+    if (it != opened_files_.end())
+    {
+        
+    }
+
+    for (auto& sfile : storage_files_)
+    {
+        if (sfile.HasFile(str_name))
+        {
+
+            break;
+        }
+    }
+
+
+    return file;
 }
 
 File* VFS::Create( const char *name )
